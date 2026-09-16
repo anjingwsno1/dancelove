@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/home/home", "pages/upload/upload", "pages/detail/detail"],
+  "window": { "navigationBarTitleText": "DANCE LOVE", "navigationBarBackgroundColor": "#f8f7f4", "navigationBarTextStyle": "black", "backgroundColor": "#f8f7f4" },
+  "networkTimeout": { "request": 30000, "uploadFile": 240000, "downloadFile": 120000 },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

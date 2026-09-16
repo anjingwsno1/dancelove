@@ -1,0 +1,34 @@
+<view class="page">
+  <view class="row top">
+    <text class="wordmark english">DANCE LOVE</text>
+    <picker wx:if="{{demo}}" range="{{accounts}}" value="{{accountIndex}}" bindchange="switchAccount"><text class="muted">{{accounts[accountIndex]}} ⌄</text></picker>
+    <text wx:else class="muted" bindtap="copyId">{{user.role==='admin'?'管理员':user.role==='teacher'?'老师':'学员'}} · 复制账号ID</text>
+  </view>
+  <view class="hero"><view class="eyebrow">MOVE. CREATE. KEEP.</view><view class="hero-title">把热爱，<text>跳成日常。</text></view><view class="muted">你的每一个 90 秒，都值得被看见。</view><button class="primary" bindtap="upload">＋ 上传我的舞蹈 ↗</button><text class="ninety">90″</text></view>
+  <view class="row quota"><text>今日免费 {{quota.freeRemaining === null ? '不限' : quota.freeRemaining}} 次 · 额外 {{quota.credits || 0}} 次</text></view>
+  <scroll-view scroll-x class="tabs">
+    <view class="tab {{scope==='public'?'selected':''}}" data-scope="public" bindtap="changeScope">发现舞蹈</view>
+    <view class="tab {{scope==='mine'?'selected':''}}" data-scope="mine" bindtap="changeScope">我的作品</view>
+    <view class="tab {{scope==='favorites'?'selected':''}}" data-scope="favorites" bindtap="changeScope">我的收藏</view>
+    <view wx:if="{{user.role==='admin'}}" class="tab {{scope==='review'?'selected':''}}" data-scope="review" bindtap="changeScope">审核</view>
+    <view wx:if="{{user.role==='admin'}}" class="tab {{scope==='categories'?'selected':''}}" data-scope="categories" bindtap="changeScope">分类管理</view>
+  </scroll-view>
+  <view wx:if="{{error}}" class="error" bindtap="retry">{{error}} · 点击重试</view>
+  <block wx:if="{{scope==='categories' && user.role==='admin'}}">
+    <view class="eyebrow">MANAGE CATEGORIES</view><view class="heading">分类管理</view>
+    <view class="muted">修改名称将同步更新全部作品；删除有作品的分类时，需要转移作品。</view>
+    <view class="field"><text class="label">{{editingId?'修改分类名称':'创建新分类'}} · 最多 12 个字</text><input class="input" value="{{categoryName}}" bindinput="categoryInput" maxlength="12" placeholder="输入分类名称" disabled="{{categoryBusy}}"/></view>
+    <view class="field"><text class="label">上级分类</text><picker range="{{parentChoices}}" range-key="name" value="{{parentIndex}}" bindchange="parentChange" disabled="{{categoryBusy}}"><view class="picker">{{parentChoices[parentIndex].name}} ⌄</view></picker></view>
+    <view class="row"><button class="primary" bindtap="saveCategory" loading="{{categoryBusy}}" disabled="{{categoryBusy}}">{{editingId?'保存修改':'创建分类'}}</button><button wx:if="{{editingId}}" class="secondary" bindtap="cancelEdit" disabled="{{categoryBusy}}">取消修改</button></view>
+    <view wx:for="{{managedCategories}}" wx:key="id" class="category-item {{item.parentId?'child-category':''}}"><view><text>{{item.parentId?'└ ':''}}{{item.name}}</text><view class="muted">{{item.videoCount}} 个视频{{item.childrenCount?' · '+item.childrenCount+' 个二级分类':''}}</view></view><view class="row"><button class="mini-button" data-id="{{item.id}}" bindtap="editCategory" disabled="{{categoryBusy}}">修改</button><button class="mini-button danger" data-id="{{item.id}}" bindtap="deleteCategory" disabled="{{categoryBusy}}">删除</button></view></view>
+    <view wx:if="{{deleting}}" class="delete-panel"><view class="heading">删除「{{deleting.name}}」？</view><view class="muted">只删除分类，视频将完整保留。</view><view wx:if="{{deleting.videoCount>0}}" class="field"><text class="label">将 {{deleting.videoCount}} 个视频转移到</text><picker range="{{moveTargets}}" range-key="name" value="{{moveIndex}}" bindchange="moveTarget" disabled="{{categoryBusy}}"><view class="picker">{{moveIndex>=0?moveTargets[moveIndex].name:'请选择目标分类'}} ⌄</view></picker></view><view class="row"><button class="primary" bindtap="confirmDelete" disabled="{{categoryBusy}}">确认删除</button><button class="secondary" bindtap="cancelDelete" disabled="{{categoryBusy}}">取消</button></view></view>
+  </block>
+  <block wx:else>
+    <input class="input search" placeholder="⌕ 搜索标题或标签" value="{{q}}" bindinput="search" maxlength="100"/>
+    <scroll-view scroll-x class="categories"><text class="chip {{category===''?'active':''}}" data-id="" bindtap="changeCategory">全部</text><text wx:for="{{categories}}" wx:key="id" class="chip {{category===item.id?'active':''}}" data-id="{{item.id}}" bindtap="changeCategory">{{item.name}}</text></scroll-view>
+    <view class="grid"><view wx:for="{{items}}" wx:key="id" class="card" data-id="{{item.id}}" bindtap="open"><view class="cover" style="background:{{item.color}}"><image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill" lazy-load/><text class="cover-title {{item.style}}" style="color:{{item.ink}}">{{item.title}}</text><text class="duration">{{item.durationText}}</text><text wx:if="{{item.visibility==='private'}}" class="private">私有</text></view><view class="row info"><text>{{item.title}}</text><text class="muted">♡ {{item.likes}}</text></view><view class="muted author">{{item.ownerName}} · {{item.status==='approved'?item.categoryName:item.statusText}}</view></view></view>
+    <view wx:if="{{!items.length && !loading && !error}}" class="empty"><view>✧</view><view>{{scope==='review'?'待审作品已全部处理':'这里，等待一段新的舞蹈'}}</view><view class="muted">{{q?'试试其他标题或标签':'让每一次起舞，都被珍藏。'}}</view></view>
+    <view wx:if="{{loading}}" class="empty">正在加载…</view>
+  </block>
+  <view class="footer">DANCE LOVE</view>
+</view>

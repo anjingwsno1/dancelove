@@ -1,0 +1,1 @@
+.player{width:100%;height:850rpx;max-height:62vh;background:#1d2419;border-radius:18rpx}.meta{margin:28rpx 0 15rpx;font-size:23rpx;color:#96a087}.tags{margin-bottom:28rpx}.row button{flex:1}textarea{width:100%;box-sizing:border-box}

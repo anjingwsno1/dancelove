@@ -1,0 +1,13 @@
+CREATE DATABASE IF NOT EXISTS dancelove CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE dancelove;
+CREATE TABLE IF NOT EXISTS users (id VARCHAR(64) PRIMARY KEY,name VARCHAR(64) NOT NULL,role ENUM('student','teacher','admin') NOT NULL,credits INT NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS sessions (token VARCHAR(128) PRIMARY KEY,user_id VARCHAR(64) NOT NULL,expires BIGINT NOT NULL,INDEX(user_id),FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS wechat_users (app_id VARCHAR(64) NOT NULL,openid VARCHAR(128) NOT NULL,user_id VARCHAR(64) NOT NULL UNIQUE,PRIMARY KEY(app_id,openid),FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS settings (`key` VARCHAR(64) PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS categories (id VARCHAR(64) PRIMARY KEY,name VARCHAR(64) NOT NULL UNIQUE,parent_id VARCHAR(64) NULL,FOREIGN KEY(parent_id) REFERENCES categories(id));
+CREATE TABLE IF NOT EXISTS videos (id VARCHAR(64) PRIMARY KEY,owner_id VARCHAR(64) NOT NULL,title VARCHAR(32) NOT NULL,tags TEXT NOT NULL,category_id VARCHAR(64) NOT NULL,visibility ENUM('public','private') NOT NULL,status ENUM('pending','approved','rejected') NOT NULL,reason TEXT NOT NULL,duration DOUBLE NOT NULL,bytes BIGINT NOT NULL,frame DOUBLE NOT NULL,color VARCHAR(16) NOT NULL,ink VARCHAR(16) NOT NULL,style VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,reviewed_by VARCHAR(64),reviewed_at VARCHAR(32),INDEX videos_feed(status,visibility,created_at),FOREIGN KEY(owner_id) REFERENCES users(id),FOREIGN KEY(category_id) REFERENCES categories(id));
+CREATE TABLE IF NOT EXISTS uploads (id VARCHAR(64) PRIMARY KEY,user_id VARCHAR(64) NOT NULL,day DATE NOT NULL,source ENUM('free','paid') NOT NULL,INDEX uploads_user_day(user_id,day),FOREIGN KEY(id) REFERENCES videos(id),FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS reactions (user_id VARCHAR(64) NOT NULL,video_id VARCHAR(64) NOT NULL,kind ENUM('like','favorite') NOT NULL,PRIMARY KEY(user_id,video_id,kind));
+CREATE TABLE IF NOT EXISTS orders (id VARCHAR(64) PRIMARY KEY,user_id VARCHAR(64) NOT NULL,amount_fen INT NOT NULL,credits INT NOT NULL,state ENUM('pending','paid') NOT NULL DEFAULT 'pending',created_at VARCHAR(32) NOT NULL,paid_at VARCHAR(32));
+CREATE TABLE IF NOT EXISTS ledger (id VARCHAR(64) PRIMARY KEY,user_id VARCHAR(64) NOT NULL,delta INT NOT NULL,reference VARCHAR(128) NOT NULL UNIQUE,created_at VARCHAR(32) NOT NULL);
+CREATE TABLE IF NOT EXISTS audit (id VARCHAR(64) PRIMARY KEY,actor VARCHAR(64) NOT NULL,video_id VARCHAR(64) NOT NULL,action VARCHAR(32) NOT NULL,reason TEXT NOT NULL,created_at VARCHAR(32) NOT NULL);

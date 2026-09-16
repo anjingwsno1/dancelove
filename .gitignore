@@ -1,0 +1,6 @@
+node_modules/
+data/
+.env
+miniprogram/config.local.js
+project.private.config.json
+test-results/
