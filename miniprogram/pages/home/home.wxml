@@ -4,7 +4,7 @@
     <picker wx:if="{{demo}}" range="{{accounts}}" value="{{accountIndex}}" bindchange="switchAccount"><text class="muted">{{accounts[accountIndex]}} ⌄</text></picker>
     <text wx:else class="muted" bindtap="copyId">{{user.role==='admin'?'管理员':user.role==='teacher'?'老师':'学员'}} · 复制账号ID</text>
   </view>
-  <view class="hero"><view class="eyebrow">MOVE. CREATE. KEEP.</view><view class="hero-title">把热爱，<text>跳成日常。</text></view><view class="muted">你的每一个 90 秒，都值得被看见。</view><button class="primary" bindtap="upload">＋ 上传我的舞蹈 ↗</button><text class="ninety">90″</text></view>
+  <view class="hero"><image class="home-logo" src="/assets/logo.png" mode="aspectFit"/><view class="eyebrow">MOVE. CREATE. KEEP.</view><view class="hero-title">把热爱，<text>跳成日常。</text></view><button class="primary" bindtap="upload">＋ 上传我的舞蹈 ↗</button></view>
   <view class="row quota"><text>今日免费 {{quota.freeRemaining === null ? '不限' : quota.freeRemaining}} 次 · 额外 {{quota.credits || 0}} 次</text></view>
   <scroll-view scroll-x class="tabs">
     <view class="tab {{scope==='public'?'selected':''}}" data-scope="public" bindtap="changeScope">发现舞蹈</view>
@@ -30,5 +30,5 @@
     <view wx:if="{{!items.length && !loading && !error}}" class="empty"><view>✧</view><view>{{scope==='review'?'待审作品已全部处理':'这里，等待一段新的舞蹈'}}</view><view class="muted">{{q?'试试其他标题或标签':'让每一次起舞，都被珍藏。'}}</view></view>
     <view wx:if="{{loading}}" class="empty">正在加载…</view>
   </block>
-  <view class="footer">DANCE LOVE</view>
+  <view class="footer">DANCE LOVE</view><view class="legal-links"><navigator url="/pages/legal/legal?type=terms">用户协议</navigator><text>｜</text><navigator url="/pages/legal/legal?type=privacy">隐私政策</navigator><text>｜</text><navigator url="/pages/support/support">支持</navigator></view>
 </view>

@@ -1,0 +1,1 @@
+<view class="page"><view class="eyebrow">DANCE LOVE</view><view class="heading">{{title}}</view><view class="updated">更新日期：2026年9月17日</view><block wx:for="{{sections}}" wx:key="0"><view class="legal-section"><view class="legal-title">{{index + 1}}. {{item[0]}}</view><view class="legal-text">{{item[1]}}</view></view></block></view>

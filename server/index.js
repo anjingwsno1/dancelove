@@ -124,7 +124,7 @@ export function createApp({dataDir=resolve(process.env.DATA_DIR||join(root,'data
       }
       if(!p.startsWith('/api/')){
         requireThat(req.method==='GET',405,'请求方法不支持');
-        const files={'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8']};
+        const files={'/':['index.html','text/html; charset=utf-8'],'/terms.html':['terms.html','text/html; charset=utf-8'],'/privacy.html':['privacy.html','text/html; charset=utf-8'],'/support.html':['support.html','text/html; charset=utf-8'],'/assets/logo.png':['assets/logo.png','image/png'],'/assets/alipay.jpg':['assets/alipay.jpg','image/jpeg'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8']};
         requireThat(files[p],404,'页面不存在');const [file,type]=files[p];const path=join(root,'web',file);await stat(path);
         res.writeHead(200,{'Content-Type':type,'X-Content-Type-Options':'nosniff'});createReadStream(path).pipe(res);return;
       }
