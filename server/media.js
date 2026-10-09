@@ -36,12 +36,12 @@ export async function receive(req, dir) {
     return fields;
   } catch(e) { await Promise.allSettled(writes); await rm(dir,{recursive:true,force:true}); throw e; }
 }
-export function validateFields(fields, store) {
+export async function validateFields(fields, store) {
   const title=(fields.title||'').trim();
   requireThat([...title].length>0&&[...title].length<=8,400,'标题应为 1 至 8 个字');
-  const category=store.one('SELECT id FROM categories WHERE id=?',fields.categoryId||'');
+  const category=await store.one('SELECT id FROM categories WHERE id=?',fields.categoryId||'');
   requireThat(category,400,'请选择有效分类');
-  requireThat(!store.one('SELECT 1 FROM categories WHERE parent_id=?',category.id),400,'请选择二级分类或没有下级的分类');
+  requireThat(!await store.one('SELECT 1 FROM categories WHERE parent_id=?',category.id),400,'请选择二级分类或没有下级的分类');
   requireThat(['public','private'].includes(fields.visibility),400,'请选择公有或私有');
   let tags; try{tags=JSON.parse(fields.tags||'[]');}catch{throw new ApiError(400,'标签格式错误');}
   requireThat(Array.isArray(tags)&&tags.length>=1&&tags.length<=8&&tags.every(t=>typeof t==='string'&&t.trim().length>0&&[...t.trim()].length<=12),400,'请填写 1 至 8 个标签，每个不超过 12 个字');

@@ -4,9 +4,19 @@
 
 ## 生产存储：MySQL 与腾讯云 COS
 
-MySQL 8.0+ 表结构在 [db/mysql-schema.sql](db/mysql-schema.sql)，先执行该文件，再在 `.env` 中配置 `MYSQL_HOST`、`MYSQL_DATABASE`、`MYSQL_USER` 和 `MYSQL_PASSWORD`。COS 通过 `MEDIA_PROVIDER=cos` 启用；配置 `COS_SECRET_ID`、`COS_SECRET_KEY`、`COS_BUCKET`、`COS_REGION` 后，视频转码完成会上传为 `COS_PREFIX/videos/<视频 ID>/video.mp4` 与 `cover.jpg`。播放、封面及下载继续由本服务的短期授权链接控制。
+微信模式后端现已连接 MySQL 8.0+。先在服务器执行 [db/mysql-schema.sql](db/mysql-schema.sql) 创建 `dancelove` 数据库，再在服务器 `.env` 设置 `APP_MODE=wechat`、`DATABASE_PROVIDER=mysql`、`MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`、`WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。运行 `npm start` 时会检查数据库连接并补建缺少的表；连接失败时服务不会启动。小程序 [config.js](miniprogram/config.js) 中的 `baseUrl` 必须指向这台服务器。
 
-本地开发默认使用 SQLite 和本地文件，避免没有云端密钥时无法启动。COS 的转码临时文件位于 `DATA_DIR/staging`，上传成功后自动删除。
+微信账号首次通过 `wx.login` 登录时，服务端在同一个 MySQL 事务里写入 `users`（ID、名称、角色）与 `wechat_users`（AppID、openid、用户 ID）；再次登录复用已有用户。可在服务器 MySQL 执行以下查询验证，或运行 `node --env-file-if-exists=.env scripts/user-role.js --list`：
+
+```sql
+SELECT u.id, u.name, u.role, w.app_id, w.openid
+FROM users u JOIN wechat_users w ON w.user_id = u.id
+ORDER BY u.id DESC;
+```
+
+COS 通过 `MEDIA_PROVIDER=cos` 启用；配置 `COS_SECRET_ID`、`COS_SECRET_KEY`、`COS_BUCKET`、`COS_REGION` 后，视频转码完成会上传为 `COS_PREFIX/videos/<视频 ID>/video.mp4` 与 `cover.jpg`。播放、封面及下载继续由本服务的短期授权链接控制。
+
+本地演示模式默认使用 SQLite 和本地文件。现有 SQLite 数据不会自动迁移至 MySQL；切换已有线上数据前需先迁移用户、作品等记录。COS 的转码临时文件位于 `DATA_DIR/staging`，上传成功后自动删除。
 
 ## 本地启动
 
@@ -26,7 +36,7 @@ npm.cmd start
 
 1. 导入本项目根目录，配置文件为 `project.config.json`，小程序源码目录为 `miniprogram/`。
 2. 当前 AppID 已配置为 `wx102ef5b8bdcbfade`，使用该小程序的开发成员账号进入开发者工具。
-3. 在本机启动后端。`miniprogram/config.js` 默认连接 `http://127.0.0.1:8787`。
+3. 在本机启动后端。`miniprogram/config.js` 当前连接 `https://dancelovemini.site`；本地联调需改为可访问的本机地址。
 4. 本地调试配置已关闭合法域名校验；在开发工具中检查相同选项。正式发布必须恢复域名校验并配置 HTTPS 合法域名。
 5. 真机联调需将 `baseUrl` 改成电脑的局域网 IP，并设置 `HOST=0.0.0.0` 启动后端。仅在可信的调试网络中使用，演示账号没有真实身份认证。真机访问能力取决于微信调试模式、测试号与系统网络权限。
 
@@ -93,7 +103,7 @@ node scripts/sample.js
 
 ```text
 miniprogram/     原生小程序：发现/作品/收藏/分类管理、上传、详情/审核
-server/         Node HTTP API、SQLite 事务、视频校验/转码/截帧
+server/         Node HTTP API、MySQL/SQLite 数据层、视频校验/转码/截帧
 web/            浏览器联调界面，与小程序共用真实 API
 tests/          API 与真实媒体处理集成测试
 scripts/        静态检查、合成视频工具

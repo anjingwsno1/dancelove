@@ -12,6 +12,7 @@
     <view class="tab {{scope==='favorites'?'selected':''}}" data-scope="favorites" bindtap="changeScope">我的收藏</view>
     <view wx:if="{{user.role==='admin'}}" class="tab {{scope==='review'?'selected':''}}" data-scope="review" bindtap="changeScope">审核</view>
     <view wx:if="{{user.role==='admin'}}" class="tab {{scope==='categories'?'selected':''}}" data-scope="categories" bindtap="changeScope">分类管理</view>
+    <view wx:if="{{user.role==='admin'}}" class="tab {{scope==='users'?'selected':''}}" data-scope="users" bindtap="changeScope">用户管理</view>
   </scroll-view>
   <view wx:if="{{error}}" class="error" bindtap="retry">{{error}} · 点击重试</view>
   <block wx:if="{{scope==='categories' && user.role==='admin'}}">
@@ -22,6 +23,11 @@
     <view class="row"><button class="primary" bindtap="saveCategory" loading="{{categoryBusy}}" disabled="{{categoryBusy}}">{{editingId?'保存修改':'创建分类'}}</button><button wx:if="{{editingId}}" class="secondary" bindtap="cancelEdit" disabled="{{categoryBusy}}">取消修改</button></view>
     <view wx:for="{{managedCategories}}" wx:key="id" class="category-item {{item.parentId?'child-category':''}}"><view><text>{{item.parentId?'└ ':''}}{{item.name}}</text><view class="muted">{{item.videoCount}} 个视频{{item.childrenCount?' · '+item.childrenCount+' 个二级分类':''}}</view></view><view class="row"><button class="mini-button" data-id="{{item.id}}" bindtap="editCategory" disabled="{{categoryBusy}}">修改</button><button class="mini-button danger" data-id="{{item.id}}" bindtap="deleteCategory" disabled="{{categoryBusy}}">删除</button></view></view>
     <view wx:if="{{deleting}}" class="delete-panel"><view class="heading">删除「{{deleting.name}}」？</view><view class="muted">只删除分类，视频将完整保留。</view><view wx:if="{{deleting.videoCount>0}}" class="field"><text class="label">将 {{deleting.videoCount}} 个视频转移到</text><picker range="{{moveTargets}}" range-key="name" value="{{moveIndex}}" bindchange="moveTarget" disabled="{{categoryBusy}}"><view class="picker">{{moveIndex>=0?moveTargets[moveIndex].name:'请选择目标分类'}} ⌄</view></picker></view><view class="row"><button class="primary" bindtap="confirmDelete" disabled="{{categoryBusy}}">确认删除</button><button class="secondary" bindtap="cancelDelete" disabled="{{categoryBusy}}">取消</button></view></view>
+  </block>
+  <block wx:elif="{{scope==='users' && user.role==='admin'}}">
+    <view class="eyebrow">MANAGE USERS</view><view class="heading">用户管理</view>
+    <view class="muted">查看用户上传与下载总数，调整学员、老师角色。</view>
+    <view wx:for="{{managedUsers}}" wx:key="id" class="user-item"><view class="user-info"><view>{{item.name}}</view><view class="muted user-id">{{item.id}}</view><view class="muted">上传 {{item.uploadCount}} · 下载 {{item.downloadCount}}</view></view><text wx:if="{{item.role==='admin'}}" class="muted">管理员</text><picker wx:else range="{{roleChoices}}" value="{{item.role==='teacher'?1:0}}" data-id="{{item.id}}" bindchange="changeUserRole" disabled="{{userBusy}}"><view class="picker">{{item.role==='teacher'?'老师':'学员'}} ⌄</view></picker></view>
   </block>
   <block wx:else>
     <input class="input search" placeholder="⌕ 搜索标题或标签" value="{{q}}" bindinput="search" maxlength="100"/>

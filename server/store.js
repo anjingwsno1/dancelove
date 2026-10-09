@@ -22,6 +22,8 @@ export function createStore(dir) {
     CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), amount_fen INTEGER NOT NULL, credits INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, paid_at TEXT);
     CREATE TABLE IF NOT EXISTS ledger(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), delta INTEGER NOT NULL, reference TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS audit(id TEXT PRIMARY KEY, actor TEXT NOT NULL, video_id TEXT NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS downloads(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), video_id TEXT NOT NULL REFERENCES videos(id), created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS downloads_user ON downloads(user_id);
   `);
   // Add hierarchy support without recreating an existing user's database.
   if (!db.prepare("SELECT 1 FROM pragma_table_info('categories') WHERE name='parent_id'").get()) db.exec('ALTER TABLE categories ADD COLUMN parent_id TEXT REFERENCES categories(id)');
@@ -37,6 +39,18 @@ export function createStore(dir) {
   const all = (sql, ...args) => db.prepare(sql).all(...args);
   const run = (sql, ...args) => db.prepare(sql).run(...args);
   const tx = fn => { db.exec('BEGIN IMMEDIATE'); try { const result = fn(); db.exec('COMMIT'); return result; } catch (e) { db.exec('ROLLBACK'); throw e; } };
+  const txAsync = async fn => {
+    const connection=new DatabaseSync(join(dir,'dance.sqlite'));
+    const scoped={
+      one:(sql,...args)=>connection.prepare(sql).get(...args),
+      all:(sql,...args)=>connection.prepare(sql).all(...args),
+      run:(sql,...args)=>connection.prepare(sql).run(...args)
+    };
+    let started=false;
+    try { connection.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; BEGIN IMMEDIATE');started=true;const result=await fn(scoped);connection.exec('COMMIT');return result; }
+    catch(e){if(started)connection.exec('ROLLBACK');throw e;}
+    finally{connection.close();}
+  };
   const user = id => one('SELECT * FROM users WHERE id=?', id);
   const quota = id => {
     const u = user(id);
@@ -69,5 +83,5 @@ export function createStore(dir) {
       return one('SELECT * FROM orders WHERE id=?',orderId);
     });
   }
-  return { db, one, all, run, tx, user, quota, submit, settle };
+  return { db, one, all, run, tx, txAsync, user, quota, submit, settle };
 }

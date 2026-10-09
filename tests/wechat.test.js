@@ -5,6 +5,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { exchangeWechatCode } from '../server/wechat.js';
 import { createApp } from '../server/index.js';
+import { createMySqlStore } from '../server/mysql-store.js';
+
+test('MySQL mode fails clearly before startup when database credentials are missing',async()=>{
+  await assert.rejects(createMySqlStore({}),e=>e.status===503&&e.message.includes('MYSQL_HOST'));
+});
 
 test('code exchange uses official server endpoint and never returns session_key',async()=>{
   const result=await exchangeWechatCode('one-time-code',{appId:'test-app',secret:'test-secret',fetchImpl:async(url)=>{
@@ -23,20 +28,21 @@ test('invalid code and provider/network failures fail closed without exposing cr
 test('WeChat users are stable students, cannot impersonate roles and cannot use demo login',async()=>{
   const dir=await mkdtemp(join(tmpdir(),'dance-wechat-'));
   const exchange=async code=>({appId:'test-app',openid:code==='person-b'?'person-b':'person-a'});
-  const app=createApp({dataDir:dir,mode:'demo',wechatExchange:exchange});
+  const app=await createApp({dataDir:dir,mode:'demo',wechatExchange:exchange});
   await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
   const url='http://127.0.0.1:'+app.server.address().port;
   const req=async(path,data,token)=>{const res=await fetch(url+'/api'+path,{method:data?'POST':'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data?JSON.stringify(data):undefined});return {status:res.status,value:await res.json()};};
   let second;
   try {
     const a=await req('/auth/wechat',{code:'person-a',role:'admin',openid:'fake'});assert.equal(a.status,200);assert.equal(a.value.user.role,'student');
+    assert.equal(app.store.one('SELECT user_id FROM wechat_users WHERE app_id=? AND openid=?','test-app','person-a').user_id,a.value.user.id);
     const again=await req('/auth/wechat',{code:'fresh-code'});assert.equal(again.value.user.id,a.value.user.id);
     const b=await req('/auth/wechat',{code:'person-b'});assert.notEqual(b.value.user.id,a.value.user.id);
     assert.equal((await req('/demo/login',{account:a.value.user.id})).status,400);
     assert.equal((await req('/categories',{name:'越权'},a.value.token)).status,403);
     assert.equal(JSON.stringify(a.value).includes('openid'),false);
     const demo=await req('/demo/login',{account:'admin'});
-    second=createApp({dataDir:dir,mode:'wechat',wechatExchange:exchange});await new Promise(resolve=>second.server.listen(0,'127.0.0.1',resolve));
+    second=await createApp({dataDir:dir,mode:'wechat',databaseProvider:'sqlite',wechatExchange:exchange});await new Promise(resolve=>second.server.listen(0,'127.0.0.1',resolve));
     const base='http://127.0.0.1:'+second.server.address().port;
     assert.equal((await fetch(base+'/api/demo/login',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"account":"admin"}'})).status,404);
     assert.equal((await fetch(base+'/api/me',{headers:{Authorization:'Bearer '+demo.value.token}})).status,401);

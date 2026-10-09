@@ -1,22 +1,31 @@
 const api = require('../../utils/api');
 Page({
-  data: { scope: 'public', categories: [], allCategories: [], category: '', q: '', items: [], loading: false, error: '', page: 1, hasMore: false, total: 0, user: {}, accounts: ['林同学 · 学员', '许老师 · 老师', '管理员', '陈同学 · 学员'], accountIndex: 0, demo: api.authMode !== 'wechat', managedCategories: [], categoryName: '', parentIndex: 0, parentChoices: [{id:'',name:'一级分类'}], editingId: '', categoryBusy: false, deleting: null, moveTargets: [], moveIndex: -1 },
+  data: { scope: 'public', categories: [], allCategories: [], category: '', q: '', items: [], loading: false, error: '', page: 1, hasMore: false, total: 0, user: {}, accounts: ['林同学 · 学员', '许老师 · 老师', '管理员', '陈同学 · 学员'], accountIndex: 0, demo: api.authMode !== 'wechat', managedCategories: [], categoryName: '', parentIndex: 0, parentChoices: [{id:'',name:'一级分类'}], editingId: '', categoryBusy: false, deleting: null, moveTargets: [], moveIndex: -1, managedUsers: [], userBusy: false, roleChoices: ['学员','老师'] },
   async onLoad() { try { await api.ensureLogin(); this.setData({ accountIndex: ['student','teacher','admin','student2'].indexOf(wx.getStorageSync('account') || 'student') }); await this.refresh(); } catch(e) { this.setData({ error: e.message }); } },
   async onShow() { if (getApp().globalData.token) await this.refresh(); },
-  async refresh() { try { const me = await api.request('/me'),allCategories=await api.request('/categories'),categories=allCategories.filter(c=>!c.parentId),parentChoices=[{id:'',name:'一级分类'}].concat(allCategories.filter(c=>!c.parentId)); this.setData({ user: me.user, quota: me.quota, allCategories, categories, parentChoices, category: allCategories.some(c=>c.id===this.data.category)?this.data.category:'' }); if(this.data.scope==='categories'&&me.user.role!=='admin')this.setData({scope:'public'}); if(this.data.scope==='categories')await this.loadCategories();else await this.load(false); } catch(e) { this.setData({ error: e.message }); } },
+  async refresh() { try { const me = await api.request('/me'),allCategories=await api.request('/categories'),categories=allCategories.filter(c=>!c.parentId),parentChoices=[{id:'',name:'一级分类'}].concat(allCategories.filter(c=>!c.parentId)); this.setData({ user: me.user, quota: me.quota, allCategories, categories, parentChoices, category: allCategories.some(c=>c.id===this.data.category)?this.data.category:'' }); if(['categories','users'].includes(this.data.scope)&&me.user.role!=='admin')this.setData({scope:'public'}); if(this.data.scope==='categories')await this.loadCategories();else if(this.data.scope==='users')await this.loadUsers();else await this.load(false); } catch(e) { this.setData({ error: e.message }); } },
   async load(append) { const revision=this.revision=(this.revision||0)+1; this.setData({ loading: true, error: '' }); try { const page = append ? this.data.page + 1 : 1; const result = await api.request('/videos?scope=' + this.data.scope + '&category=' + this.data.category + '&q=' + encodeURIComponent(this.data.q) + '&page=' + page); if(revision!==this.revision)return; this.setData({ items: append ? this.data.items.concat(result.items.map(api.video)) : result.items.map(api.video), page, total: result.total, hasMore: result.hasMore }); } catch(e) { this.setData({ error: e.message }); } finally { if(revision===this.revision)this.setData({ loading: false }); } },
   async switchAccount(e) { try { const index=Number(e.detail.value); await api.login(['student','teacher','admin','student2'][index]); this.setData({ accountIndex: index, scope: 'public' }); await this.refresh(); } catch(e) { api.error(e); } },
-  changeScope(e) { this.setData({ scope: e.currentTarget.dataset.scope }); if(this.data.scope==='categories')this.loadCategories();else this.load(false); },
+  changeScope(e) { this.setData({ scope: e.currentTarget.dataset.scope }); if(this.data.scope==='categories')this.loadCategories();else if(this.data.scope==='users')this.loadUsers();else this.load(false); },
   changeCategory(e) { this.setData({ category: e.currentTarget.dataset.id }); this.load(false); },
   search(e) { this.setData({ q: e.detail.value }); clearTimeout(this.searchTimer); this.searchTimer=setTimeout(()=>this.load(false),300); },
   onUnload() { clearTimeout(this.searchTimer); },
   async onPullDownRefresh() { await this.refresh(); wx.stopPullDownRefresh(); },
-  onReachBottom() { if(this.data.scope!=='categories'&&this.data.hasMore&&!this.data.loading)this.load(true); },
+  onReachBottom() { if(!['categories','users'].includes(this.data.scope)&&this.data.hasMore&&!this.data.loading)this.load(true); },
   open(e) { wx.navigateTo({ url: '/pages/detail/detail?id=' + e.currentTarget.dataset.id + (this.data.scope === 'review' ? '&review=1' : '') }); },
   upload() { wx.navigateTo({ url: '/pages/upload/upload' }); },
   async retry() { try { getApp().globalData.token=''; await api.ensureLogin(); await this.refresh(); } catch(e) { this.setData({error:e.message}); } },
   copyId() { wx.setClipboardData({data:this.data.user.id}); },
   async loadCategories() { try { this.setData({managedCategories:await api.request('/categories?manage=1'),error:''}); } catch(e) { this.setData({error:e.message}); } },
+  async loadUsers() { try { this.setData({managedUsers:await api.request('/users'),error:''}); } catch(e) { this.setData({error:e.message}); } },
+  async changeUserRole(e) {
+    if(this.data.userBusy)return;
+    const id=e.currentTarget.dataset.id,role=e.detail.value==='1'?'teacher':'student';
+    this.setData({userBusy:true});
+    try { await api.request('/users/'+encodeURIComponent(id)+'/role','PATCH',{role}); await this.loadUsers(); wx.showToast({title:'角色已更新'}); }
+    catch(error) { api.error(error); await this.loadUsers(); }
+    finally { this.setData({userBusy:false}); }
+  },
   categoryInput(e) { this.setData({categoryName:e.detail.value}); },
   parentChange(e) { this.setData({parentIndex:Number(e.detail.value)}); },
   editCategory(e) { const c=this.data.managedCategories.find(c=>c.id===e.currentTarget.dataset.id); if(c)this.setData({editingId:c.id,categoryName:c.name,parentIndex:Math.max(0,this.data.parentChoices.findIndex(p=>p.id===(c.parentId||'')))}); },

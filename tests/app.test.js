@@ -16,7 +16,7 @@ async function request(path,{account='student',method='GET',data,headers={}}={})
 async function upload(account,fields={},file=clip) {const data=new FormData();for(const [key,value] of Object.entries({title:'风中起舞',categoryId:'classical',tags:'["古典","练习"]',visibility:'public',frame:'0.5',style:'poetry',...fields}))data.set(key,value);data.set('video',new Blob([file],{type:'video/mp4'}),'dance.mp4');return request('/videos',{account,method:'POST',data});}
 async function approve(id){return request(`/videos/${id}/review`,{account:'admin',method:'POST',data:{decision:'approved'}});}
 before(async()=>{
-  dir=await mkdtemp(join(tmpdir(),'dancelove-test-'));app=createApp({dataDir:dir});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));base='http://127.0.0.1:'+app.server.address().port;
+  dir=await mkdtemp(join(tmpdir(),'dancelove-test-'));app=await createApp({dataDir:dir});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));base='http://127.0.0.1:'+app.server.address().port;
   for(const account of ['student','student2','teacher','admin'])tokens[account]=(await request('/demo/login',{method:'POST',data:{account}})).value.token;
   const short=join(dir,'short.mp4'),long=join(dir,'long.mp4');
   await execute(ffmpeg,['-v','error','-f','lavfi','-i','testsrc2=size=160x240:rate=12','-t','2','-c:v','libx264','-pix_fmt','yuv420p','-y',short]);
@@ -27,13 +27,13 @@ after(async()=>{if(app){await new Promise(resolve=>app.server.close(resolve));ap
 test('API requires a session; clients cannot choose their own role',async()=>{
   assert.equal((await request('/me',{account:'none'})).status,401);
   const login=await request('/demo/login',{method:'POST',data:{account:'student',role:'admin'}});assert.equal(login.value.user.role,'student');
-  assert.throws(()=>createApp({dataDir:dir,mode:'production'}),/正式上线/);
+  await assert.rejects(createApp({dataDir:dir,mode:'production'}),/正式上线/);
 });
 test('Shanghai daily boundary is independent of host timezone',()=>{assert.equal(dayKey(new Date('2026-09-16T15:59:59Z')),'2026-09-16');assert.equal(dayKey(new Date('2026-09-16T16:00:00Z')),'2026-09-17');});
-test('invalid title, category, tags, visibility and frame fail validation',()=>{
+test('invalid title, category, tags, visibility and frame fail validation',async()=>{
   const valid={title:'起舞',categoryId:'jazz',tags:'["练习"]',visibility:'public',frame:'0'};
-  for(const changes of [{title:'一二三四五六七八九'},{title:' '},{categoryId:'bogus'},{tags:'[]'},{tags:'[1]'},{tags:'{}'},{tags:JSON.stringify(Array(9).fill('a'))},{visibility:'everyone'},{frame:'NaN'},{frame:'-1'},{style:'evil'}])assert.throws(()=>validateFields({...valid,...changes},app.store));
-  assert.equal(validateFields({...valid,title:'一二三四五六七八'},app.store).title.length,8);
+  for(const changes of [{title:'一二三四五六七八九'},{title:' '},{categoryId:'bogus'},{tags:'[]'},{tags:'[1]'},{tags:'{}'},{tags:JSON.stringify(Array(9).fill('a'))},{visibility:'everyone'},{frame:'NaN'},{frame:'-1'},{style:'evil'}])await assert.rejects(validateFields({...valid,...changes},app.store));
+  assert.equal((await validateFields({...valid,title:'一二三四五六七八'},app.store)).title.length,8);
 });
 test('actual duration >90s and invalid media fail without consuming quota',async()=>{
   const before=app.store.quota('student');
@@ -180,4 +180,24 @@ test('occupied category deletion atomically moves every video without changing v
 test('last remaining category cannot be deleted',async()=>{
   for(const c of app.store.all("SELECT id FROM categories WHERE id<>'practice'"))assert.equal((await request('/categories/'+c.id,{account:'admin',method:'DELETE',data:{moveTo:'practice'}})).status,200);
   assert.equal((await request('/categories/practice',{account:'admin',method:'DELETE',data:{}})).status,409);
+});
+test('admins can inspect user totals and change only non-admin roles',async()=>{
+  assert.equal((await request('/users')).status,403);
+  assert.equal((await request('/users/student2/role',{method:'PATCH',data:{role:'teacher'}})).status,403);
+  const before=(await request('/users',{account:'admin'})).value;
+  const student=before.find(u=>u.id==='student');
+  assert.equal(student.uploadCount,app.store.one('SELECT COUNT(*) n FROM uploads WHERE user_id=?','student').n);
+  assert.equal(student.downloadCount,app.store.one('SELECT COUNT(*) n FROM downloads WHERE user_id=?','student').n);
+  assert.equal(Object.hasOwn(student,'credits'),false);
+  const video=app.store.one("SELECT id FROM videos WHERE status='approved' AND visibility='public' LIMIT 1");
+  assert.equal((await request(`/videos/${video.id}/download`,{account:'student2',method:'POST',data:{}})).status,200);
+  const after=(await request('/users',{account:'admin'})).value;
+  assert.equal(after.find(u=>u.id==='student2').downloadCount,before.find(u=>u.id==='student2').downloadCount+1);
+  assert.equal((await request('/users/student2/role',{account:'admin',method:'PATCH',data:{role:'admin'}})).status,400);
+  assert.equal((await request('/users/admin/role',{account:'admin',method:'PATCH',data:{role:'teacher'}})).status,403);
+  assert.equal((await request('/users/unknown/role',{account:'admin',method:'PATCH',data:{role:'teacher'}})).status,404);
+  assert.equal((await request('/users/student2/role',{account:'admin',method:'PATCH',data:{role:'teacher'}})).status,200);
+  assert.equal((await request('/me',{account:'student2'})).value.user.role,'teacher');
+  assert.equal((await request('/users/student2/role',{account:'admin',method:'PATCH',data:{role:'student'}})).status,200);
+  assert.equal((await request('/me',{account:'student2'})).value.user.role,'student');
 });

@@ -1,19 +1,20 @@
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const state={token:localStorage.getItem('danceToken'),view:'public',category:'',q:'',page:1,items:[],editingCategory:''};
-const labels={public:'发现舞蹈',mine:'我的作品',favorites:'我的收藏',review:'审核工作台',categories:'分类管理'};
+const labels={public:'发现舞蹈',mine:'我的作品',favorites:'我的收藏',review:'审核工作台',categories:'分类管理',users:'用户管理'};
 const statuses={pending:'待审核',approved:'已通过',rejected:'未通过'};
 const commonTags=['舞蹈日常','基本功','零基础','舞台练习'];
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(message){$('#toast').textContent=message;$('#toast').style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').style.display='none',3500);}
 async function api(path,method='GET',data){const res=await fetch('/api'+path,{method,headers:{Authorization:`Bearer ${state.token}`,...(data instanceof FormData?{}:{'Content-Type':'application/json'})},body:data===undefined?undefined:data instanceof FormData?data:JSON.stringify(data)});const value=await res.json();if(!res.ok)throw new Error(value.error);return value;}
 function guard(fn){return async(...args)=>{try{await fn(...args);}catch(e){toast(e.message);}};}
-async function refreshMe(){state.me=await api('/me');$('#reviewNav').hidden=state.me.user.role!=='admin';$('#categoryNav').hidden=state.me.user.role!=='admin';const q=state.me.quota;$('#quotaSummary').textContent=`今日剩余免费次数：${q.freeRemaining??'不限'} · 额外次数：${q.credits} · 学员每天 1 次 / 老师每天 2 次 / 管理员不限`;}
+async function refreshMe(){state.me=await api('/me');$('#reviewNav').hidden=state.me.user.role!=='admin';$('#categoryNav').hidden=state.me.user.role!=='admin';$('#userNav').hidden=state.me.user.role!=='admin';const q=state.me.quota;$('#quotaSummary').textContent=`今日剩余免费次数：${q.freeRemaining??'不限'} · 额外次数：${q.credits} · 学员每天 1 次 / 老师每天 2 次 / 管理员不限`;}
 async function login(account){const value=await api('/demo/login','POST',{account});state.token=value.token;localStorage.setItem('danceToken',value.token);localStorage.setItem('danceAccount',account);await refreshMe();await refreshCategories();await load();}
 async function load(append=false){
   const revision=state.revision=(state.revision||0)+1;
-  $('#breadcrumb').textContent=labels[state.view];$('#library').hidden=state.view==='categories';$('#categoryManager').hidden=state.view!=='categories';
+  $('#breadcrumb').textContent=labels[state.view];$('#library').hidden=['categories','users'].includes(state.view);$('#categoryManager').hidden=state.view!=='categories';$('#userManager').hidden=state.view!=='users';
   $$('#nav button').forEach(b=>b.classList.toggle('selected',b.dataset.view===state.view));
   if(state.view==='categories'){await manageCategories();return;}
+  if(state.view==='users'){await manageUsers();return;}
   $('#viewTitle').innerHTML=`${labels[state.view]} <span id="total">…</span>`;
   const result=await api('/videos?'+new URLSearchParams({scope:state.view,category:state.category,q:state.q,page:state.page}));if(revision!==state.revision)return;
   state.items=append?[...state.items,...result.items]:result.items;$('#total').textContent=result.total;$('#more').hidden=!result.hasMore;
@@ -38,6 +39,11 @@ async function manageCategories(){
   $('#categoryParent').innerHTML='<option value="">一级分类</option>'+categories.filter(c=>!c.parentId).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   $('#categoryList').innerHTML=categories.map(c=>`<div class="category-row ${c.parentId?'child-category':''}"><div><b>${esc(c.parentId?'└ '+c.name:c.name)}</b><p class="muted">${c.videoCount} 个视频${c.childrenCount?' · '+c.childrenCount+' 个二级分类':''}</p></div><div class="actions"><button class="secondary" data-edit-category="${c.id}">修改</button><button class="secondary danger" data-delete-category="${c.id}">删除</button></div></div>`).join('');
 }
+async function manageUsers(){
+  const users=await api('/users');
+  $('#userList').innerHTML=users.map(u=>`<div class="user-row"><div><b>${esc(u.name)}</b><p class="muted">${esc(u.id)} · 上传 ${Number(u.uploadCount)} · 下载 ${Number(u.downloadCount)}</p></div><div>${u.role==='admin'?'<span class="muted">管理员</span>':`<select class="role-select" data-user-id="${esc(u.id)}" aria-label="${esc(u.name)}的角色"><option value="student" ${u.role==='student'?'selected':''}>学员</option><option value="teacher" ${u.role==='teacher'?'selected':''}>老师</option></select>`}</div></div>`).join('');
+}
+$('#userList').addEventListener('change',guard(async e=>{const select=e.target.closest('[data-user-id]');if(!select)return;select.disabled=true;try{await api('/users/'+encodeURIComponent(select.dataset.userId)+'/role','PATCH',{role:select.value});toast('用户角色已更新');await manageUsers();}catch(error){await manageUsers();throw error;}finally{select.disabled=false;}}));
 function resetCategoryForm(){state.editingCategory='';$('#categoryName').value='';$('#categoryParent').value='';$('#categoryParent').disabled=false;$('#categoryFormLabel').textContent='创建新分类';$('#saveCategory').textContent='创建分类';$('#cancelCategory').hidden=true;}
 $('#categoryForm').onsubmit=guard(async e=>{e.preventDefault();const b=$('#saveCategory');b.disabled=true;try{await api('/categories'+(state.editingCategory?'/'+state.editingCategory:''),state.editingCategory?'PATCH':'POST',{name:$('#categoryName').value,parentId:$('#categoryParent').value||null});resetCategoryForm();await refreshCategories();await manageCategories();toast('分类已保存');}finally{b.disabled=false;}});
 $('#cancelCategory').onclick=resetCategoryForm;
