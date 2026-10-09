@@ -61,6 +61,9 @@ test('admin review is exclusive; approval unlocks search, playback, range and id
   const video=results.value.items[0];assert.ok(video.coverUrl);assert.match(video.color,/^#[0-9a-f]{6}$/);
   const cover=await fetch(base+video.coverUrl);assert.equal(cover.headers.get('content-type'),'image/jpeg');assert.ok((await cover.arrayBuffer()).byteLength>100);
   const range=await fetch(base+video.playUrl,{headers:{Range:'bytes=0-99'}});assert.equal(range.status,206);assert.equal((await range.arrayBuffer()).byteLength,100);
+  const full=Buffer.from(await (await fetch(base+video.playUrl)).arrayBuffer());
+  const suffix=await fetch(base+video.playUrl,{headers:{Range:'bytes=-100'}});assert.equal(suffix.status,206);assert.deepEqual(Buffer.from(await suffix.arrayBuffer()),full.subarray(-100));
+  assert.equal((await fetch(base+video.playUrl,{headers:{Range:'bytes=-0'}})).status,416);
   assert.equal((await fetch(base+video.playUrl,{headers:{Range:'bytes=999999999-'}})).status,416);
   assert.equal((await fetch(base+video.playUrl+'x')).status,403);
   for(let i=0;i<2;i++)assert.equal((await request(`/videos/${v.id}/like`,{method:'PUT',data:{active:true}})).value.likes,1);

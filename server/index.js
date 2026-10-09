@@ -84,16 +84,17 @@ export async function createApp({dataDir=resolve(process.env.DATA_DIR||join(root
     const file=payload.k==='cover'?'cover.jpg':'video.mp4';
     const headers={'Content-Type':payload.k==='cover'?'image/jpeg':'video/mp4','Cache-Control':'private, no-store','Accept-Ranges':'bytes','X-Content-Type-Options':'nosniff'};
     if(payload.k==='download')headers['Content-Disposition']=`attachment; filename="dance-${v.id}.mp4"`;
-    // COS 会在 Content-Range 中返回对象总大小；本地存储则直接读取文件长度。
+    // 先取得完整对象大小，再据此计算播放与下载的范围响应。
     let start=0,end=undefined,status=200;
     const requested=req.headers.range&&/^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
-    if(req.headers.range&&!requested){res.writeHead(416);res.end();return;}
-    if(requested&&requested[1]) start=Number(requested[1]);
-    const object=await mediaStorage.read(v.id,file,requested&&requested[1]?{start,end:requested[2]?Number(requested[2]):undefined}:undefined);
-    const total=Number((object.headers?.['content-range']||'').match(/\/(\d+)$/)?.[1]||object.size);
+    if(req.headers.range&&(!requested||(!requested[1]&&!requested[2]))){res.writeHead(416);res.end();return;}
+    const range=requested?(requested[1]?{start:Number(requested[1]),end:requested[2]?Number(requested[2]):undefined}:{suffix:Number(requested[2])}):undefined;
+    const object=await (req.method==='HEAD'?mediaStorage.head(v.id,file):mediaStorage.read(v.id,file,range));
+    const total=Number(object.size);
+    if(requested&&requested[1]) start=range.start;
     end=requested&&requested[2]?Math.min(Number(requested[2]),total-1):total-1;
-    if(requested&&!requested[1]){const suffix=Number(requested[2]);start=Math.max(0,total-suffix);end=total-1;}
-    if(start>end||start>=total){res.writeHead(416,{'Content-Range':`bytes */${total}`});res.end();return;}
+    if(requested&&!requested[1]){start=Math.max(0,total-range.suffix);end=total-1;}
+    if(start>end||start>=total||requested&&!requested[1]&&range.suffix===0){if(object.stream){object.stream.on('error',()=>{});object.stream.destroy();}res.writeHead(416,{'Content-Range':`bytes */${total}`});res.end();return;}
     if(req.headers.range){
       status=206;headers['Content-Range']=`bytes ${start}-${end}/${total}`;
     }
@@ -143,6 +144,13 @@ export async function createApp({dataDir=resolve(process.env.DATA_DIR||join(root
       const u=await store.user(session.user_id);
       if(mode==='wechat')requireThat(await store.one('SELECT 1 FROM wechat_users WHERE user_id=?',u.id),401,'请使用微信重新登录');
       if(p==='/api/me'&&req.method==='GET'){json(res,200,{user:u,quota:await store.quota(u.id),mode,paymentsEnabled:false});return;}
+      if(p==='/api/me'&&req.method==='PATCH'){
+        const {nickname}=await body(req);
+        requireThat(typeof nickname==='string'&&nickname.trim().length>0&&[...nickname.trim()].length<=20&&!/[\x00-\x1f\x7f]/.test(nickname),400,'昵称需为 1 至 20 个字');
+        const name=nickname.trim();
+        await store.run('UPDATE users SET name=? WHERE id=?',name,u.id);
+        json(res,200,{user:await store.user(u.id)});return;
+      }
       if(p==='/api/users'&&req.method==='GET'){
         requireThat(u.role==='admin',403,'仅管理员可管理用户');
         json(res,200,await store.all(`SELECT users.id,users.name,users.role,

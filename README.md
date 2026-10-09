@@ -18,6 +18,12 @@ COS 通过 `MEDIA_PROVIDER=cos` 启用；配置 `COS_SECRET_ID`、`COS_SECRET_KE
 
 本地演示模式默认使用 SQLite 和本地文件。现有 SQLite 数据不会自动迁移至 MySQL；切换已有线上数据前需先迁移用户、作品等记录。COS 的转码临时文件位于 `DATA_DIR/staging`，上传成功后自动删除。
 
+### 线上上传返回 413
+
+`/api/videos` 上传上限在应用内为 100 MiB。如果响应是 `Content-Type: text/html` 且 `Server: nginx` 的 413，说明请求在进入 Node 服务前就被 Nginx 拒绝。把 [docs/nginx-upload.conf](docs/nginx-upload.conf) 中的 `client_max_body_size 101m;` 加到 `dancelovemini.site` 现有的 **HTTPS `server {}`** 中（也可在该 `server {}` 内 `include` 此文件），保留原有 `proxy_pass` 配置。101 MiB 为 100 MiB 视频加 multipart 表单留余量，服务端仍会校验视频本身不超过 100 MiB。
+
+在服务器执行 `sudo nginx -t`，通过后执行 `sudo systemctl reload nginx`。再上传一个小于 100 MiB 的视频；若仍返回 HTML 413，检查实际生效的站点配置和上游代理的请求体上限。小程序现在会将 413 显示为上传限制提示。
+
 ## 本地启动
 
 需要 Node.js 22.13 或以上（本项目在 Node.js 24.15 上测试）。首次安装需要网络，安装包会下载 FFmpeg / FFprobe，可能需要几分钟。

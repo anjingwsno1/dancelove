@@ -1,9 +1,9 @@
 const api = require('../../utils/api');
 Page({
-  data: { scope: 'public', categories: [], allCategories: [], category: '', q: '', items: [], loading: false, error: '', page: 1, hasMore: false, total: 0, user: {}, accounts: ['林同学 · 学员', '许老师 · 老师', '管理员', '陈同学 · 学员'], accountIndex: 0, demo: api.authMode !== 'wechat', managedCategories: [], categoryName: '', parentIndex: 0, parentChoices: [{id:'',name:'一级分类'}], editingId: '', categoryBusy: false, deleting: null, moveTargets: [], moveIndex: -1, managedUsers: [], userBusy: false, roleChoices: ['学员','老师'] },
+  data: { scope: 'public', categories: [], allCategories: [], category: '', q: '', items: [], loading: false, error: '', page: 1, hasMore: false, total: 0, user: {}, accounts: ['林同学 · 学员', '许老师 · 老师', '管理员', '陈同学 · 学员'], accountIndex: 0, demo: api.authMode !== 'wechat', nicknameEditing: false, nicknameDraft: '', nicknameBusy: false, managedCategories: [], categoryName: '', parentIndex: 0, parentChoices: [{id:'',name:'一级分类'}], editingId: '', categoryBusy: false, deleting: null, moveTargets: [], moveIndex: -1, managedUsers: [], userBusy: false },
   async onLoad() { try { await api.ensureLogin(); this.setData({ accountIndex: ['student','teacher','admin','student2'].indexOf(wx.getStorageSync('account') || 'student') }); await this.refresh(); } catch(e) { this.setData({ error: e.message }); } },
   async onShow() { if (getApp().globalData.token) await this.refresh(); },
-  async refresh() { try { const me = await api.request('/me'),allCategories=await api.request('/categories'),categories=allCategories.filter(c=>!c.parentId),parentChoices=[{id:'',name:'一级分类'}].concat(allCategories.filter(c=>!c.parentId)); this.setData({ user: me.user, quota: me.quota, allCategories, categories, parentChoices, category: allCategories.some(c=>c.id===this.data.category)?this.data.category:'' }); if(['categories','users'].includes(this.data.scope)&&me.user.role!=='admin')this.setData({scope:'public'}); if(this.data.scope==='categories')await this.loadCategories();else if(this.data.scope==='users')await this.loadUsers();else await this.load(false); } catch(e) { this.setData({ error: e.message }); } },
+  async refresh() { try { const me = await api.request('/me'),allCategories=await api.request('/categories'),categories=allCategories.filter(c=>!c.parentId),parentChoices=[{id:'',name:'一级分类'}].concat(allCategories.filter(c=>!c.parentId)); this.setData({ user: me.user, quota: me.quota, allCategories, categories, parentChoices, category: allCategories.some(c=>c.id===this.data.category)?this.data.category:'', nicknameEditing: this.data.nicknameEditing || (!this.data.demo && me.user.name==='微信学员') }); if(['categories','users'].includes(this.data.scope)&&me.user.role!=='admin')this.setData({scope:'public'}); if(this.data.scope==='categories')await this.loadCategories();else if(this.data.scope==='users')await this.loadUsers();else await this.load(false); } catch(e) { this.setData({ error: e.message }); } },
   async load(append) { const revision=this.revision=(this.revision||0)+1; this.setData({ loading: true, error: '' }); try { const page = append ? this.data.page + 1 : 1; const result = await api.request('/videos?scope=' + this.data.scope + '&category=' + this.data.category + '&q=' + encodeURIComponent(this.data.q) + '&page=' + page); if(revision!==this.revision)return; this.setData({ items: append ? this.data.items.concat(result.items.map(api.video)) : result.items.map(api.video), page, total: result.total, hasMore: result.hasMore }); } catch(e) { this.setData({ error: e.message }); } finally { if(revision===this.revision)this.setData({ loading: false }); } },
   async switchAccount(e) { try { const index=Number(e.detail.value); await api.login(['student','teacher','admin','student2'][index]); this.setData({ accountIndex: index, scope: 'public' }); await this.refresh(); } catch(e) { api.error(e); } },
   changeScope(e) { this.setData({ scope: e.currentTarget.dataset.scope }); if(this.data.scope==='categories')this.loadCategories();else if(this.data.scope==='users')this.loadUsers();else this.load(false); },
@@ -16,11 +16,30 @@ Page({
   upload() { wx.navigateTo({ url: '/pages/upload/upload' }); },
   async retry() { try { getApp().globalData.token=''; await api.ensureLogin(); await this.refresh(); } catch(e) { this.setData({error:e.message}); } },
   copyId() { wx.setClipboardData({data:this.data.user.id}); },
+  copyFilingUrl() { wx.setClipboardData({data:'https://beian.miit.gov.cn/'}); },
+  editNickname() { this.setData({nicknameEditing:true,nicknameDraft:this.data.user.name==='微信学员'?'':this.data.user.name}); },
+  nicknameInput(e) { this.setData({nicknameDraft:e.detail.value}); },
+  cancelNickname() { this.setData({nicknameEditing:false,nicknameDraft:''}); },
+  async saveNickname() {
+    if(this.data.nicknameBusy)return;
+    const nickname=this.data.nicknameDraft.trim();
+    if(!nickname||[...nickname].length>20)return api.error(new Error('昵称需为 1 至 20 个字'));
+    this.setData({nicknameBusy:true});
+    try { const result=await api.request('/me','PATCH',{nickname}); this.setData({user:result.user,nicknameEditing:false,nicknameDraft:''}); wx.showToast({title:'昵称已保存'}); }
+    catch(error) { api.error(error); }
+    finally { this.setData({nicknameBusy:false}); }
+  },
   async loadCategories() { try { this.setData({managedCategories:await api.request('/categories?manage=1'),error:''}); } catch(e) { this.setData({error:e.message}); } },
   async loadUsers() { try { this.setData({managedUsers:await api.request('/users'),error:''}); } catch(e) { this.setData({error:e.message}); } },
-  async changeUserRole(e) {
+  editUserRole(e) {
     if(this.data.userBusy)return;
-    const id=e.currentTarget.dataset.id,role=e.detail.value==='1'?'teacher':'student';
+    const id=e.currentTarget.dataset.id;
+    wx.showActionSheet({itemList:['设为学员','设为老师'],success:result=>this.changeUserRole(id,result.tapIndex===1?'teacher':'student')});
+  },
+  async changeUserRole(id,role) {
+    if(this.data.userBusy)return;
+    const target=this.data.managedUsers.find(user=>user.id===id);
+    if(!target||target.role===role)return;
     this.setData({userBusy:true});
     try { await api.request('/users/'+encodeURIComponent(id)+'/role','PATCH',{role}); await this.loadUsers(); wx.showToast({title:'角色已更新'}); }
     catch(error) { api.error(error); await this.loadUsers(); }

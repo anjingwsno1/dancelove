@@ -4,6 +4,11 @@
     <picker wx:if="{{demo}}" range="{{accounts}}" value="{{accountIndex}}" bindchange="switchAccount"><text class="muted">{{accounts[accountIndex]}} ⌄</text></picker>
     <text wx:else class="muted" bindtap="copyId">{{user.role==='admin'?'管理员':user.role==='teacher'?'老师':'学员'}} · 复制账号ID</text>
   </view>
+  <view wx:if="{{!demo}}" class="nickname-card">
+    <view class="nickname-info"><text class="nickname-label">微信昵称</text><text class="nickname-value">{{user.name==='微信学员'?'尚未设置':user.name}}</text></view>
+    <button class="nickname-edit" bindtap="editNickname">{{user.name==='微信学员'?'设置昵称':'修改昵称'}}</button>
+  </view>
+  <view wx:if="{{nicknameEditing}}" class="nickname-panel"><text class="label">选择或输入微信昵称</text><input class="input" type="nickname" value="{{nicknameDraft}}" bindinput="nicknameInput" maxlength="20" placeholder="微信昵称"/><view class="nickname-actions"><button class="primary" bindtap="saveNickname" loading="{{nicknameBusy}}" disabled="{{nicknameBusy}}">保存昵称</button><button class="secondary" bindtap="cancelNickname" disabled="{{nicknameBusy}}">取消</button></view></view>
   <view class="hero"><image class="home-logo" src="/assets/logo.png" mode="aspectFit"/><view class="eyebrow">MOVE. CREATE. KEEP.</view><view class="hero-title">把热爱，<text>跳成日常。</text></view><button class="primary" bindtap="upload">＋ 上传我的舞蹈 ↗</button></view>
   <view class="row quota"><text>今日免费 {{quota.freeRemaining === null ? '不限' : quota.freeRemaining}} 次 · 额外 {{quota.credits || 0}} 次</text></view>
   <scroll-view scroll-x class="tabs">
@@ -21,13 +26,13 @@
     <view class="field"><text class="label">{{editingId?'修改分类名称':'创建新分类'}} · 最多 12 个字</text><input class="input" value="{{categoryName}}" bindinput="categoryInput" maxlength="12" placeholder="输入分类名称" disabled="{{categoryBusy}}"/></view>
     <view class="field"><text class="label">上级分类</text><picker range="{{parentChoices}}" range-key="name" value="{{parentIndex}}" bindchange="parentChange" disabled="{{categoryBusy}}"><view class="picker">{{parentChoices[parentIndex].name}} ⌄</view></picker></view>
     <view class="row"><button class="primary" bindtap="saveCategory" loading="{{categoryBusy}}" disabled="{{categoryBusy}}">{{editingId?'保存修改':'创建分类'}}</button><button wx:if="{{editingId}}" class="secondary" bindtap="cancelEdit" disabled="{{categoryBusy}}">取消修改</button></view>
-    <view wx:for="{{managedCategories}}" wx:key="id" class="category-item {{item.parentId?'child-category':''}}"><view><text>{{item.parentId?'└ ':''}}{{item.name}}</text><view class="muted">{{item.videoCount}} 个视频{{item.childrenCount?' · '+item.childrenCount+' 个二级分类':''}}</view></view><view class="row"><button class="mini-button" data-id="{{item.id}}" bindtap="editCategory" disabled="{{categoryBusy}}">修改</button><button class="mini-button danger" data-id="{{item.id}}" bindtap="deleteCategory" disabled="{{categoryBusy}}">删除</button></view></view>
+    <view wx:for="{{managedCategories}}" wx:key="id" class="category-item {{item.parentId?'child-category':''}}"><view class="category-info"><text class="category-name">{{item.parentId?'└ ':''}}{{item.name}}</text><view class="muted">{{item.videoCount}} 个视频{{item.childrenCount?' · '+item.childrenCount+' 个二级分类':''}}</view></view><view class="category-actions"><button class="mini-button" data-id="{{item.id}}" bindtap="editCategory" disabled="{{categoryBusy}}">修改</button><button class="mini-button danger" data-id="{{item.id}}" bindtap="deleteCategory" disabled="{{categoryBusy}}">删除</button></view></view>
     <view wx:if="{{deleting}}" class="delete-panel"><view class="heading">删除「{{deleting.name}}」？</view><view class="muted">只删除分类，视频将完整保留。</view><view wx:if="{{deleting.videoCount>0}}" class="field"><text class="label">将 {{deleting.videoCount}} 个视频转移到</text><picker range="{{moveTargets}}" range-key="name" value="{{moveIndex}}" bindchange="moveTarget" disabled="{{categoryBusy}}"><view class="picker">{{moveIndex>=0?moveTargets[moveIndex].name:'请选择目标分类'}} ⌄</view></picker></view><view class="row"><button class="primary" bindtap="confirmDelete" disabled="{{categoryBusy}}">确认删除</button><button class="secondary" bindtap="cancelDelete" disabled="{{categoryBusy}}">取消</button></view></view>
   </block>
   <block wx:elif="{{scope==='users' && user.role==='admin'}}">
     <view class="eyebrow">MANAGE USERS</view><view class="heading">用户管理</view>
     <view class="muted">查看用户上传与下载总数，调整学员、老师角色。</view>
-    <view wx:for="{{managedUsers}}" wx:key="id" class="user-item"><view class="user-info"><view>{{item.name}}</view><view class="muted user-id">{{item.id}}</view><view class="muted">上传 {{item.uploadCount}} · 下载 {{item.downloadCount}}</view></view><text wx:if="{{item.role==='admin'}}" class="muted">管理员</text><picker wx:else range="{{roleChoices}}" value="{{item.role==='teacher'?1:0}}" data-id="{{item.id}}" bindchange="changeUserRole" disabled="{{userBusy}}"><view class="picker">{{item.role==='teacher'?'老师':'学员'}} ⌄</view></picker></view>
+    <scroll-view scroll-x class="users-scroll"><view class="users-table"><view class="users-row users-header"><text>微信昵称</text><text>角色</text><text>上传次数</text><text>下载次数</text></view><view wx:for="{{managedUsers}}" wx:key="id" class="users-row"><text class="users-name">{{!item.name || item.name==='微信学员'?'未设置昵称':item.name}}</text><view class="users-role"><text>{{item.role==='admin'?'管理员':item.role==='teacher'?'老师':'学员'}}</text><button wx:if="{{item.role!=='admin'}}" class="role-edit" data-id="{{item.id}}" bindtap="editUserRole" disabled="{{userBusy}}">修改角色</button></view><text>{{item.uploadCount}}</text><text>{{item.downloadCount}}</text></view></view></scroll-view>
   </block>
   <block wx:else>
     <input class="input search" placeholder="⌕ 搜索标题或标签" value="{{q}}" bindinput="search" maxlength="100"/>
@@ -36,5 +41,5 @@
     <view wx:if="{{!items.length && !loading && !error}}" class="empty"><view>✧</view><view>{{scope==='review'?'待审作品已全部处理':'这里，等待一段新的舞蹈'}}</view><view class="muted">{{q?'试试其他标题或标签':'让每一次起舞，都被珍藏。'}}</view></view>
     <view wx:if="{{loading}}" class="empty">正在加载…</view>
   </block>
-  <view class="footer">DANCE LOVE</view><view class="legal-links"><navigator url="/pages/legal/legal?type=terms">用户协议</navigator><text>｜</text><navigator url="/pages/legal/legal?type=privacy">隐私政策</navigator><text>｜</text><navigator url="/pages/support/support">支持</navigator></view>
+  <view class="footer">DANCE LOVE</view><view class="legal-links"><navigator url="/pages/legal/legal?type=terms">用户协议</navigator><text>｜</text><navigator url="/pages/legal/legal?type=privacy">隐私政策</navigator><text>｜</text><navigator url="/pages/support/support">支持</navigator></view><view class="filing" bindtap="copyFilingUrl">粤ICP备2026142648号<text> · 点击复制查询网址</text></view>
 </view>

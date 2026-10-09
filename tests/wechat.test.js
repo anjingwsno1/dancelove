@@ -37,6 +37,13 @@ test('WeChat users are stable students, cannot impersonate roles and cannot use 
     const a=await req('/auth/wechat',{code:'person-a',role:'admin',openid:'fake'});assert.equal(a.status,200);assert.equal(a.value.user.role,'student');
     assert.equal(app.store.one('SELECT user_id FROM wechat_users WHERE app_id=? AND openid=?','test-app','person-a').user_id,a.value.user.id);
     const again=await req('/auth/wechat',{code:'fresh-code'});assert.equal(again.value.user.id,a.value.user.id);
+    const nicknameResponse=await fetch(url+'/api/me',{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+a.value.token},body:JSON.stringify({nickname:'小舞者'})});
+    assert.equal(nicknameResponse.status,200);
+    assert.equal((await nicknameResponse.json()).user.name,'小舞者');
+    assert.equal(app.store.one('SELECT name FROM users WHERE id=?',a.value.user.id).name,'小舞者');
+    assert.equal((await req('/auth/wechat',{code:'person-a'})).value.user.name,'小舞者');
+    const badNickname=await fetch(url+'/api/me',{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+a.value.token},body:JSON.stringify({nickname:'  '})});
+    assert.equal(badNickname.status,400);
     const b=await req('/auth/wechat',{code:'person-b'});assert.notEqual(b.value.user.id,a.value.user.id);
     assert.equal((await req('/demo/login',{account:a.value.user.id})).status,400);
     assert.equal((await req('/categories',{name:'越权'},a.value.token)).status,403);
@@ -50,6 +57,7 @@ test('WeChat users are stable students, cannot impersonate roles and cannot use 
     // An operator can assign a real account; a subsequent refresh reflects it.
     app.store.run("UPDATE users SET role='admin' WHERE id=?",a.value.user.id);
     assert.equal((await req('/me',undefined,a.value.token)).value.user.role,'admin');
+    assert.equal((await req('/users',undefined,a.value.token)).value.find(user=>user.id===a.value.user.id).name,'小舞者');
     assert.equal((await req('/categories',{name:'微信管理员创建'},a.value.token)).status,201);
   } finally {
     if(second){await new Promise(resolve=>second.server.close(resolve));second.store.db.close();}
